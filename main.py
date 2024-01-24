@@ -1,7 +1,8 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
-# It seems the code execution environment has been reset, so I need to re-import pandas
 import pandas as pd
+import scipy.stats as stats
+from scipy.stats import ttest_rel, wilcoxon
 
 # Re-load the Excel file to examine its structure
 file_path = 'Case07-data.xlsx'
@@ -48,9 +49,6 @@ plt.legend(title='Modality')
 plt.show()
 
 # Adjusting the previous code to include interpretation of the results
-
-from scipy.stats import ttest_rel, wilcoxon
-
 # Lists to store p-values and interpretations
 ttest_results = []
 wilcoxon_results = []
@@ -92,3 +90,48 @@ for i, factor in enumerate(tlx_factors, 1):
 
 plt.tight_layout()
 plt.show()
+
+
+# Function to check normality for each TLX factor
+def check_normality(data, factor_names):
+    for factor in factor_names:
+        print(f"--- Checking Normality for {factor} ---")
+
+        # Combining scores from both modalities
+        combined_scores = pd.concat([data[f'Hand_{factor}'], data[f'Headset_{factor}']])
+
+        # Histogram
+        plt.figure(figsize=(12, 4))
+        plt.subplot(1, 2, 1)
+        plt.hist(combined_scores, bins=20, alpha=0.7, color='blue')
+        plt.title(f'Histogram of {factor}')
+
+        # Q-Q Plot
+        plt.subplot(1, 2, 2)
+        stats.probplot(combined_scores, dist="norm", plot=plt)
+        plt.title(f'Q-Q Plot of {factor}')
+        plt.show()
+
+        # Shapiro-Wilk Test
+        shapiro_test = stats.shapiro(combined_scores)
+        print(f"Shapiro-Wilk Test for {factor}: Statistic={shapiro_test[0]}, p-value={shapiro_test[1]}")
+        print("Interpretation:", "Data is likely normal" if shapiro_test[1] > 0.05 else "Data is likely not normal")
+
+        # D'Agostino's K^2 Test
+        dagostino_test = stats.normaltest(combined_scores)
+        print(f"D'Agostino's K^2 Test for {factor}: Statistic={dagostino_test[0]}, p-value={dagostino_test[1]}")
+        print("Interpretation:", "Data is likely normal" if dagostino_test[1] > 0.05 else "Data is likely not normal")
+
+        # Anderson-Darling Test
+        anderson_test = stats.anderson(combined_scores, dist='norm')
+        print(f"Anderson-Darling Test for {factor}: Statistic={anderson_test.statistic}")
+        for i in range(len(anderson_test.critical_values)):
+            sl, cv = anderson_test.significance_level[i], anderson_test.critical_values[i]
+            if anderson_test.statistic > cv:
+                print(f"At the {sl}% significance level, the data is likely not normal (statistic > critical value).")
+            else:
+                print(f"At the {sl}% significance level, the data is likely normal (statistic <= critical value).")
+
+
+# Checking normality for each TLX factor
+check_normality(data_cleaned, tlx_factors)
