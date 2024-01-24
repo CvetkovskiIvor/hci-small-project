@@ -3,6 +3,7 @@ import seaborn as sns
 import pandas as pd
 import scipy.stats as stats
 from scipy.stats import ttest_rel, wilcoxon
+import numpy as np
 
 # Re-load the Excel file to examine its structure
 file_path = 'Case07-data.xlsx'
@@ -95,7 +96,7 @@ plt.show()
 # Function to check normality for each TLX factor
 def check_normality(data, factor_names):
     for factor in factor_names:
-        print(f"--- Checking Normality for {factor} ---")
+        print(f"\n--- Checking Normality for {factor} ---")
 
         # Combining scores from both modalities
         combined_scores = pd.concat([data[f'Hand_{factor}'], data[f'Headset_{factor}']])
@@ -114,17 +115,17 @@ def check_normality(data, factor_names):
 
         # Shapiro-Wilk Test
         shapiro_test = stats.shapiro(combined_scores)
-        print(f"Shapiro-Wilk Test for {factor}: Statistic={shapiro_test[0]}, p-value={shapiro_test[1]}")
+        print(f"\nShapiro-Wilk Test for {factor}: Statistic={shapiro_test[0]}, p-value={shapiro_test[1]}")
         print("Interpretation:", "Data is likely normal" if shapiro_test[1] > 0.05 else "Data is likely not normal")
 
         # D'Agostino's K^2 Test
         dagostino_test = stats.normaltest(combined_scores)
-        print(f"D'Agostino's K^2 Test for {factor}: Statistic={dagostino_test[0]}, p-value={dagostino_test[1]}")
+        print(f"\nD'Agostino's K^2 Test for {factor}: Statistic={dagostino_test[0]}, p-value={dagostino_test[1]}")
         print("Interpretation:", "Data is likely normal" if dagostino_test[1] > 0.05 else "Data is likely not normal")
 
         # Anderson-Darling Test
         anderson_test = stats.anderson(combined_scores, dist='norm')
-        print(f"Anderson-Darling Test for {factor}: Statistic={anderson_test.statistic}")
+        print(f"\nAnderson-Darling Test for {factor}: Statistic={anderson_test.statistic}")
         for i in range(len(anderson_test.critical_values)):
             sl, cv = anderson_test.significance_level[i], anderson_test.critical_values[i]
             if anderson_test.statistic > cv:
@@ -135,3 +136,43 @@ def check_normality(data, factor_names):
 
 # Checking normality for each TLX factor
 check_normality(data_cleaned, tlx_factors)
+
+# Continuing from the provided code to include Z value calculation in Wilcoxon Signed-Rank Test
+
+# Function to calculate the Z value for the Wilcoxon Signed-Rank Test
+def calculate_wilcoxon_z(hand_scores, headset_scores):
+    # Calculate the differences and their absolute values
+    differences = hand_scores - headset_scores
+    abs_diff = np.abs(differences)
+
+    # Assign ranks to absolute differences
+    ranks = abs_diff.rank()
+
+    # Calculate the sum of ranks for positive and negative differences
+    pos_rank_sum = np.sum(ranks[differences > 0])
+    neg_rank_sum = np.sum(ranks[differences < 0])
+
+    # Wilcoxon statistic (smaller of the two rank sums)
+    W = min(pos_rank_sum, neg_rank_sum)
+
+    # Number of non-zero differences
+    n = np.count_nonzero(differences)
+
+    # Expected value and standard deviation for W
+    E_W = n * (n + 1) / 4
+    StdDev_W = np.sqrt(n * (n + 1) * (2 * n + 1) / 24)
+
+    # Z value calculation
+    Z = (W - E_W) / StdDev_W
+    return Z
+
+# Adding Z value calculation to the results
+for factor in tlx_factors:
+    # Extracting scores for each modality
+    hand_scores = data_cleaned[f'Hand_{factor}']
+    headset_scores = data_cleaned[f'Headset_{factor}']
+
+    # Calculating the Z value for Wilcoxon Signed-Rank Test
+    Z = calculate_wilcoxon_z(hand_scores, headset_scores)
+    print(f"Wilcoxon Z value for {factor}: {Z}")
+
