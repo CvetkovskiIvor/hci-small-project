@@ -4,6 +4,7 @@ import pandas as pd
 import scipy.stats as stats
 from scipy.stats import ttest_rel, wilcoxon
 import numpy as np
+import pingouin as pg
 
 # Re-load the Excel file to examine its structure
 file_path = 'Case07-data.xlsx'
@@ -65,9 +66,26 @@ for factor in tlx_factors:
     ttest_results.append((factor, t_pval, ttest_interpretation))
 
     # Performing the Wilcoxon signed-rank test
-    w_stat, w_pval = wilcoxon(hand_scores, headset_scores)
+    w_stat, w_pval = wilcoxon(x=hand_scores, y=headset_scores, method='approx')
+    res = wilcoxon(x=hand_scores, y=headset_scores, method='approx')
+
+    print(f"{factor} average hand: {np.average(hand_scores)} average head: {np.average(headset_scores)}")
+    print(f"median of difference {np.median(np.array(hand_scores) - np.array(headset_scores))}")
+    print("res", res)
+
+    # Performing the Wilcoxon Signed-Rank Test using pingouin
+    wilcoxon_results2 = pg.wilcoxon(hand_scores, headset_scores)
+
+    # The Z value and p-value are part of the results
+    p_value = wilcoxon_results2['p-val'][0]
+
+    # Print the results
+    print("Wilcoxon Signed-Rank Test Results using Pingouin")
+    print(f"Z value: {wilcoxon_results2}")
+    print(f"P value: {p_value}")
+
     wilcoxon_interpretation = "Significant difference" if w_pval < 0.05 else "No significant difference"
-    wilcoxon_results.append((factor, w_pval, wilcoxon_interpretation))
+    wilcoxon_results.append((factor, w_pval, wilcoxon_interpretation, res.zstatistic))
 
 # Displaying the results
 print("Paired t-test results:")
@@ -75,8 +93,8 @@ for factor, pval, interpretation in ttest_results:
     print(f"{factor}: p-value = {pval}, Interpretation: {interpretation}")
 
 print("\nWilcoxon test results:")
-for factor, pval, interpretation in wilcoxon_results:
-    print(f"{factor}: p-value = {pval}, Interpretation: {interpretation}")
+for factor, pval, interpretation, zstatistic in wilcoxon_results:
+    print(f"{factor}: p-value = {pval}, Interpretation: {interpretation}, zstat: {zstatistic}")
 
 # Creating a single plot with the distribution for each TLX factor
 plt.figure(figsize=(15, 10))
@@ -166,6 +184,42 @@ def calculate_wilcoxon_z(hand_scores, headset_scores):
     Z = (W - E_W) / StdDev_W
     return Z
 
+def calculate_wilcoxon_z2(hand_scores, headset_scores):
+    # Calculate the differences and their absolute values
+    differences = np.array(hand_scores) - np.array(headset_scores)
+    abs_diff = np.abs(differences)
+
+    # Exclude zero differences
+    non_zero_diff = abs_diff[abs_diff != 0]
+    non_zero_diff_indices = differences != 0
+
+    # Assign ranks to absolute differences
+    ranks = pd.Series(non_zero_diff).rank()
+
+    # Sum of ranks for positive and negative differences
+    pos_rank_sum = np.sum(ranks[differences[non_zero_diff_indices] > 0])
+    neg_rank_sum = np.sum(ranks[differences[non_zero_diff_indices] < 0])
+
+    # Wilcoxon statistic (smaller of the two rank sums)
+    W = min(pos_rank_sum, neg_rank_sum)
+
+    # Number of non-zero differences
+    n = len(non_zero_diff)
+
+    # Expected value and standard deviation for W
+    E_W = n * (n + 1) / 4
+    StdDev_W = np.sqrt(n * (n + 1) * (2 * n + 1) / 24)
+
+    # Adjusting for ties (if any)
+    unique, counts = np.unique(non_zero_diff, return_counts=True)
+    tie_correction = sum([k**3 - k for k in counts if k > 1]) / 48
+    StdDev_W = np.sqrt(StdDev_W**2 - tie_correction)
+
+    # Continuity correction (optional, useful for small sample sizes)
+    Z = (W - E_W - 0.5) / StdDev_W
+
+    return Z
+
 # Adding Z value calculation to the results
 for factor in tlx_factors:
     # Extracting scores for each modality
@@ -174,5 +228,7 @@ for factor in tlx_factors:
 
     # Calculating the Z value for Wilcoxon Signed-Rank Test
     Z = calculate_wilcoxon_z(hand_scores, headset_scores)
-    print(f"Wilcoxon Z value for {factor}: {Z}")
+    Z2 = calculate_wilcoxon_z2(hand_scores, headset_scores)
 
+    print(f"Wilcoxon Z value for {factor}: {Z}")
+    print(f"WIlcoxon Z2 value for {factor}: {Z2}")
